@@ -49,6 +49,9 @@ def edit_message(chat_id, message_id, text, reply_markup=None):
         payload["reply_markup"] = reply_markup
     return tg_post("editMessageText", payload)
 
+def delete_message(chat_id, message_id):
+    return tg_post("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
+
 # ---------- Google Sheets (public append via Apps Script) ----------
 
 def append_to_sheet(name, amount, user):
@@ -71,6 +74,22 @@ def append_to_sheet(name, amount, user):
     except Exception as e:
         print(f"[Sheet error] {e}")
         return False
+
+def query_history():
+    """Gọi Apps Script lấy tổng quỹ tháng hiện tại.
+    Trả None nếu chưa cấu hình APPS_SCRIPT_URL, dict {status:error} nếu lỗi."""
+    apps_script_url = os.environ.get("APPS_SCRIPT_URL", "")
+    if not apps_script_url:
+        return None
+    try:
+        sep = "&" if "?" in apps_script_url else "?"
+        url = f"{apps_script_url}{sep}action=history"
+        req = urllib.request.Request(url, headers={"User-Agent": "TelegramBot"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.loads(r.read().decode())
+    except Exception as e:
+        print(f"[history error] {e}")
+        return {"status": "error"}
 
 # ---------- VietQR ----------
 
@@ -135,6 +154,48 @@ def handle_update(update):
         send_message(chat_id,
             f"📊 Xem quỹ tại:\n"
             f"https://docs.google.com/spreadsheets/d/{SHEET_ID}")
+        return
+
+    # /history - tổng số tiền góp quỹ trong tháng hiện tại
+    if text.startswith("/history"):
+        data = query_history()
+        if data is None:
+            send_message(chat_id,
+                "⚠️ Lịch sử quỹ chưa được bật.\n"
+                "Cần cấu hình <code>APPS_SCRIPT_URL</code> (Google Apps Script) trước nhé.")
+            return
+        if data.get("status") == "error" or "total" not in data:
+            send_message(chat_id, "⚠️ Tạm thời chưa đọc được dữ liệu quỹ. Thử lại sau nhé.")
+            return
+        total = int(data.get("total", 0))
+        count = int(data.get("count", 0))
+        month = data.get("month", "")
+        send_message(chat_id,
+            f"📊 <b>Lịch sử quỹ {FUND_NAME}</b>\n"
+            f"🗓 Tháng <b>{month}</b>\n\n"
+            f"💰 Tổng đã đóng: <b>{total:,}đ</b>\n"
+            f"🧾 Số lượt đóng: <b>{count}</b>")
+        return
+
+    # /clear - xóa đoạn hội thoại gần đây
+    if text.startswith("/clear"):
+        USER_STATE.pop(chat_id, None)
+        current_id = msg["message_id"]
+        deleted = 0
+        misses = 0
+        # Telegram: chỉ xóa được tin < 48h; trong chat riêng bot xóa được cả tin của mình lẫn của user.
+        for mid in range(current_id, max(0, current_id - 50), -1):
+            if delete_message(chat_id, mid).get("ok"):
+                deleted += 1
+                misses = 0
+            else:
+                misses += 1
+                if misses >= 12:   # đã ra ngoài vùng xóa được → dừng sớm cho nhanh
+                    break
+        send_message(chat_id,
+            f"🧹 Đã dọn <b>{deleted}</b> tin nhắn gần đây.\n"
+            "<i>(Telegram không cho xóa tin cũ hơn 48 giờ.)</i>\n\n"
+            "Gõ /start để bắt đầu lại 👇")
         return
 
     # Đang chờ nhập số tiền
