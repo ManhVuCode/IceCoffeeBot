@@ -153,7 +153,7 @@ def handle_update(update):
     if text.startswith("/xemquy"):
         send_message(chat_id,
             f"📊 Xem quỹ tại:\n"
-            f"https://docs.google.com/spreadsheets/d/{SHEET_ID}")
+            f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit?gid=0#gid=0")
         return
 
     # /history - tổng số tiền góp quỹ trong tháng hiện tại
