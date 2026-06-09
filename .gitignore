@@ -1,0 +1,22 @@
+# Secrets — KHÔNG commit token thật
+.env
+.env.local
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Vercel
+.vercel
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Claude Code local
+.claude/
